@@ -1,0 +1,9 @@
+[Unit]
+Description=Job that runs
+
+[Service]
+EnvironmentFile=-/etc/param
+ExecStart=/usr/bin/java -jar /tmp/webApp-0.0.1-SNAPSHOT.jar --hostname=${hostname} --password=${password} --username=${username} --bucketName=${bucketName} --publish.metrics=${publishMetrics} --metrics.server.hostname=${metricsServerHost} --metrics.server.port=${metricsServerPort} --amazonSNS.topicArn=${topicArn}
+
+[Install]
+WantedBy=multi-user.target

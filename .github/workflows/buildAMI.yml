@@ -1,0 +1,73 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+
+name: Unit Test and Build AMI with packer
+
+env:
+  ARTIFACT_NAME: csye6225-webapp-${{ github.sha }}.zip
+  CODEDEPLOY_APPLICATION_NAME: csye6225-webapp
+  CODEDEPLOY_APPLICATION_DEPLOYMENT_GROUP_NAME: csye6225-webapp-deployment
+  
+on:
+  pull_request:
+    branches: [ PROD_BRANCH ]
+    types: [closed]
+
+
+jobs:
+
+  packer_build:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B package --file pom.xml
+
+      # - name: Packer build
+      #   uses: hashicorp/packer-github-actions@master
+      #   with:
+      #     command: build
+      #     target: ami.json
+      #     arguments: "-var-file=var.json"
+
+      - name: Build Deployment Artifact
+        run: |
+          mkdir codedeploy_artifact
+          zip -r ${{ env.ARTIFACT_NAME }} target/webApp-0.0.1-SNAPSHOT.jar codedeploy/*.sh appspec.yml cloudwatch-config.json
+          ls -al
+          mv ${{ env.ARTIFACT_NAME }} codedeploy_artifact/
+          ls -al
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+
+      - name: Push to s3 bucket
+        run: |
+          aws deploy push \
+          --application-name ${{ env.CODEDEPLOY_APPLICATION_NAME }} \
+          --description "Latest revision for csye6225-webapp-${{ github.sha }}" \
+          --ignore-hidden-files \
+          --s3-location s3://${{ secrets.S3_CODEDEPLOY_BUCKET }}/csye6225-webapp-${{ github.sha}}.zip \
+          --source .
+
+      - name: Code Deploy
+        run: |
+          aws deploy create-deployment \
+          --application-name ${{ env.CODEDEPLOY_APPLICATION_NAME }} \
+          --deployment-config-name CodeDeployDefault.AllAtOnce \
+          --deployment-group-name ${{ env.CODEDEPLOY_APPLICATION_DEPLOYMENT_GROUP_NAME }} \
+          --s3-location bucket=${{ secrets.S3_CODEDEPLOY_BUCKET }},key=${{ env.ARTIFACT_NAME }},bundleType=zip
+
+      

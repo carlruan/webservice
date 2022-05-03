@@ -1,0 +1,67 @@
+{
+    "variables": {
+        "aws_access_key": "{{env `AWS_ACCESS_KEY`}}",
+        "aws_secret_key": "{{env `AWS_SECRET_KEY`}}",
+        "aws_region": "{{env `AWS_REGION`}}",
+        "ssh_username": "ec2-user",
+        "source_ami": "ami-048ff3da02834afdc",
+        "aws_account1": "",
+        "aws_account2": ""
+    },
+    
+    "builders": [
+        {
+          "type": "amazon-ebs",
+          "access_key": "{{user `aws_access_key`}}",
+          "secret_key": "{{user `aws_secret_key`}}",
+          "region": "{{user `aws_region`}}",
+          "source_ami": "{{user `source_ami`}}",
+          "instance_type": "t2.micro",
+          "ami_users": ["{{aws_account1}}", "{{aws_account2}}"],
+          "ssh_username": "{{user `ssh_username`}}",
+          "ssh_timeout": "2m",
+          "ami_name": "csye6225_username {{timestamp}}",
+          "ami_description": "AMI for csye6225",
+          "launch_block_device_mappings": [
+              {
+                  "device_name": "/dev/xvda",
+                  "volume_size": 20,
+                  "volume_type": "gp2",
+                  "delete_on_termination": true
+              }
+          ]
+        }
+      ],
+
+      "provisioners": [
+        {
+          "type": "file",
+          "source": "web.service",
+          "destination": "/tmp/"
+        },
+        {
+          "type": "file",
+          "source": "cloudwatch-config.json",
+          "destination": "/tmp/"
+        },
+        {
+          "type": "file",
+          "source": "./target/webApp-0.0.1-SNAPSHOT.jar",
+          "destination": "/tmp/"
+        },
+        {
+          "type": "shell",
+          "inline": [
+            "sudo yum update -y",
+            "sudo yum install ruby -y",
+            "sudo yum install wget -y",
+            "sudo yum install amazon-cloudwatch-agent -y",
+            "sudo amazon-linux-extras install java-openjdk11 -y",
+            "sudo chmod -R 777 /tmp/webApp-0.0.1-SNAPSHOT.jar",
+            "sudo chmod -R 777 /tmp/cloudwatch-config.json",
+            "sudo cp -r /tmp/web.service /lib/systemd/system/",
+            "sudo chmod 777 /lib/systemd/system/web.service"
+          ]
+        }
+      ]
+}
